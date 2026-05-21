@@ -14,7 +14,7 @@
 
 ## 技术栈
 
-- **前端**：Vue 3 (Composition API) + Vite + Tailwind CSS v4 + daisyUI v5 + Vue Router + Pinia
+- **前端**：Vue 3 (Composition API) + Vite + Tailwind CSS v4 + Vue Router + Pinia
 - **后端**：Python 3 + FastAPI + Uvicorn + NumPy + Matplotlib
 - **AI**：DeepSeek-V4 Flash (via SiliconFlow API)，支持流式 SSE 对话
 - **桌面端**：Tauri v2 (Rust) + Nuitka 单文件 Python 侧载
@@ -84,7 +84,7 @@ cd frontend && npm run dev:frontend
 前端地址：`http://localhost:5173`
 后端地址：`http://localhost:8000`
 
-Vite 代理规则自动将 `/api/*`、`/ai_chat`、`/ai_stop`、`/health` 转发到后端。
+Vite 代理规则自动将 `/api`、`/ai_chat`、`/ai_stop`、`/health` 转发到后端。
 
 ### 方式二：Tauri 桌面开发模式
 
