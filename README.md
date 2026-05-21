@@ -9,14 +9,14 @@
 | 牛顿环干涉仿真演示 | 完整：多种配置（接触/非接触、凹/凸透镜） |
 | 实验数据处理 | 完整：线性回归计算曲率半径 |
 | PDF 手册集成 | 完整：原理、步骤、分析指南 |
-| AI 助教对话 | 完整：基于 DeepSeek-V3.2 的流式问答 |
+| AI 助教对话 | 完整：基于 DeepSeek-V4 Flash 的流式问答 |
 
 
 ## 技术栈
 
 - **前端**：Vue 3 (Composition API) + Vite + Tailwind CSS v4 + daisyUI v5 + Vue Router + Pinia
 - **后端**：Python 3 + FastAPI + Uvicorn + NumPy + Matplotlib
-- **AI**：DeepSeek-V3.2 (via SiliconFlow API)，支持流式 SSE 对话
+- **AI**：DeepSeek-V4 Flash (via SiliconFlow API)，支持流式 SSE 对话
 - **桌面端**：Tauri v2 (Rust) + Nuitka 单文件 Python 侧载
 - **目标平台**：Windows (NSIS 安装包)
 
@@ -134,7 +134,7 @@ python pack.py
 |------|------|--------|
 | `NEWTON_AI_API_KEY` | AI 服务 API 密钥 | - |
 | `NEWTON_AI_BASE_URL` | AI 服务 Base URL | `https://api.siliconflow.cn` |
-| `NEWTON_AI_MODEL` | AI 模型名称 | `Pro/deepseek-ai/DeepSeek-V3.2` |
+| `NEWTON_AI_MODEL` | AI 模型名称 | `deepseek-ai/DeepSeek-V4-Flash` |
 | `NEWTON_CORS_ORIGINS` | 允许的 CORS 源（逗号分隔） | `*` |
 
 示例 `.env`：
@@ -142,7 +142,7 @@ python pack.py
 ```env
 NEWTON_AI_API_KEY=your-key
 NEWTON_AI_BASE_URL=https://api.siliconflow.cn
-NEWTON_AI_MODEL=Pro/deepseek-ai/DeepSeek-V3.2
+NEWTON_AI_MODEL=deepseek-ai/DeepSeek-V4-Flash
 NEWTON_CORS_ORIGINS=http://localhost:5173,http://localhost:8000
 ```
 
