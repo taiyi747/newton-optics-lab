@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.claude/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-error.log
+yarn-debug.log*
+
+# Frontend build
+frontend/dist/
+frontend/.vite/
+dist/
+
+# Server build (Nuitka)
+server.build/
+server.dist/
+server.onefile-build/
+
+# Tauri
+src-tauri/target/
+src-tauri/binaries/_internal/
+
+# 日志与临时文件
+*.log
+nuitka-crash-report.xml
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# 环境配置（包含敏感信息）
+.env
+lib/_config_built.py
+
+# 图标资源（如有）
+图标/
+
+# 测试数据/模板（按需保留或移除）
+template.csv
+template.zip
+CLAUDE.md

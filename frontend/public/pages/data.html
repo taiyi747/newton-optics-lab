@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据记录</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+        .data-container {
+            width: 100%;
+            max-width: 800px;
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        /* 响应式表格容器 */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            margin-bottom: 20px;
+        }
+
+        table {
+            width: 100%;
+            min-width: 650px; /* 确保在小屏上不会挤压变形 */
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px 8px;
+            text-align: center;
+        }
+        th {
+            background: #3b82f6;
+            color: white;
+            font-weight: bold;
+        }
+        td:first-child {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        /* 输入框样式优化 */
+        input {
+            width: 100%;
+            max-width: 80px;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        /* --- 核心修改：去掉数字输入框右侧的上下箭头 --- */
+        /* Chrome, Safari, Edge, Opera */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        /* Firefox */
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        .button-row {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-secondary { background: #6b7280; color: white; }
+
+        .notice {
+            margin-top: 20px;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 5px;
+            color: #1565c0;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="data-container">
+        <h2>实验数据记录</h2>
+
+        <div class="table-responsive">
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>侧别</th>
+                        <th>40</th>
+                        <th>35</th>
+                        <th>30</th>
+                        <th>25</th>
+                        <th>20</th>
+                        <th>15</th>
+                        <th>10</th>
+                        <th>5</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Left</td>
+                        <td><input type="number" step="0.001" data-side="left" data-level="40"></td>
+                        <td><input type="number" step="0.001" data-side="left" data-level="35"></td>
+                        <td><input type="number" step="0.001" data-side="left" data-level="30"></td>
+                        <td><input type="number" step="0.001" data-side="left" data-level="25"></td>
+                        <td><input type="number" step="0.001" data-side="left" data-level="20"></td>
+                        <td><input type="number" step="0.001" data-side="left" data-level="15"></td>
+                        <td><input type="number" step="0.001" data-side="left" data-level="10"></td>
+                        <td><input type="number" step="0.001" data-side="left" data-level="5"></td>
+                    </tr>
+                    <tr>
+                        <td>Right</td>
+                        <td><input type="number" step="0.001" data-side="right" data-level="40"></td>
+                        <td><input type="number" step="0.001" data-side="right" data-level="35"></td>
+                        <td><input type="number" step="0.001" data-side="right" data-level="30"></td>
+                        <td><input type="number" step="0.001" data-side="right" data-level="25"></td>
+                        <td><input type="number" step="0.001" data-side="right" data-level="20"></td>
+                        <td><input type="number" step="0.001" data-side="right" data-level="15"></td>
+                        <td><input type="number" step="0.001" data-side="right" data-level="10"></td>
+                        <td><input type="number" step="0.001" data-side="right" data-level="5"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="button-row">
+            <button id="saveBtn" class="btn btn-primary">保存到本地文件</button>
+            <button id="clearBtn" class="btn btn-secondary">清空数据</button>
+        </div>
+
+        <div class="notice">
+            提示：数据单位为毫米(mm)，请根据标尺读数手动输入测量结果。
+        </div>
+    </div>
+
+    <script>
+        // 收集表格数据并格式化为CSV (与template.csv格式一致)
+        function formatDataAsCSV() {
+            const levels = [40, 35, 30, 25, 20, 15, 10, 5];
+
+            // 第一行：环数标题
+            let content = ',' + levels.join(',') + '\n';
+
+            // 第二行：Left数据
+            let leftValues = levels.map(level => {
+                const input = document.querySelector(`input[data-side="left"][data-level="${level}"]`);
+                return input?.value || '';
+            });
+            content += 'Left,' + leftValues.join(',') + '\n';
+
+            // 第三行：Right数据
+            let rightValues = levels.map(level => {
+                const input = document.querySelector(`input[data-side="right"][data-level="${level}"]`);
+                return input?.value || '';
+            });
+            content += 'Right,' + rightValues.join(',');
+
+            return content;
+        }
+
+        // 保存数据到本地文件
+        async function saveData() {
+            if (!window.__TAURI__) {
+                alert('保存功能需要 Tauri 环境');
+                return;
+            }
+
+            try {
+                const { save } = window.__TAURI__.dialog;
+                const { writeTextFile } = window.__TAURI__.fs;
+
+                const filePath = await save({
+                    defaultPath: '牛顿环实验数据.csv',
+                    filters: [{ name: 'CSV', extensions: ['csv'] }]
+                });
+
+                if (filePath) {
+                    const content = formatDataAsCSV();
+                    await writeTextFile(filePath, content);
+                    alert('数据已保存到: ' + filePath);
+                }
+            } catch (error) {
+                console.error('保存失败:', error);
+                alert('保存失败: ' + error.message);
+            }
+        }
+
+        // 清空表格数据
+        function clearData() {
+            if (confirm('确定要清空所有数据吗？')) {
+                const inputs = document.querySelectorAll('#dataTable input');
+                inputs.forEach(input => input.value = '');
+            }
+        }
+
+        // 绑定按钮事件
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('saveBtn').addEventListener('click', saveData);
+            document.getElementById('clearBtn').addEventListener('click', clearData);
+        });
+    </script>
+</body>
+</html>

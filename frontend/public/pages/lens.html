@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>目镜窗口</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        overflow: hidden;
+        background-color: #1a1a1a;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+    }
+    .lens-container {
+        position: relative;
+        /* 关键：使用自适应宽度，但限制最大尺寸 */
+        width: 100vw; 
+        height: 100vw;
+        max-width: 600px;
+        max-height: 600px;
+        background: #000;
+    }
+    /* 底层：牛顿环Canvas */
+    #ringsCanvas {
+        position: absolute;
+        z-index: 1;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+    }
+    /* 中层：亮度滤镜 */
+    #filterLayer {
+        position: absolute;
+        z-index: 2;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        background-color: transparent;
+    }
+    /* 顶层：目镜装饰图 */
+    #coverImg {
+        position: absolute;
+        z-index: 3;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain; /* 确保图片完整显示且比例正确 */
+        pointer-events: none;
+    }
+    /* 目镜按钮: 使用百分比定位 (510/600 = 85%, 22/600 = 3.6%) */
+    #eyepieceBtn {
+        position: absolute;
+        right: 2.5%;
+        top: 3.5%;
+        width: 12.5%; /* 75/600 */
+        height: 12.5%;
+        opacity: 0;
+        cursor: pointer;
+        background: transparent;
+        border: none;
+        z-index: 4;
+    }
+    #eyepieceBtn:hover {
+        opacity: 0.2;
+        background: rgba(255, 255, 255, 0.5);
+    }
+    /* 物镜按钮: 使用百分比定位 (525/600 = 87.5%, 518/600 = 86.3%) */
+    #objectiveBtn {
+        position: absolute;
+        right: 0%;
+        bottom: 1.5%;
+        width: 12.5%;
+        height: 12.5%;
+        cursor: pointer;
+        background: transparent;
+        border: none;
+        z-index: 4;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    #objectiveBtn img {
+        width: 80%;
+        height: 80%;
+        object-fit: contain;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+    }
+    #objectiveBtn:hover img {
+        opacity: 1;
+    }
+    /* 状态面板 */
+    #statusPanel {
+        position: absolute;
+        bottom: 12px;
+        left: 12px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 5px;
+        font-size: 12px;
+        z-index: 5;
+        pointer-events: none;
+    }
+</style>
+</head>
+<body>
+    <div class="lens-container">
+        <!-- 底层：牛顿环Canvas -->
+        <canvas id="ringsCanvas" width="600" height="600"></canvas>
+
+        <!-- 中层：亮度滤镜 -->
+        <div id="filterLayer"></div>
+
+        <!-- 顶层：目镜装饰图 -->
+        <img id="coverImg" src="../img/sim/mj1.png" alt="目镜">
+
+        <!-- 目镜按钮 -->
+        <button id="eyepieceBtn" title="调整目镜"></button>
+
+        <!-- 物镜按钮 -->
+        <button id="objectiveBtn" title="调节物镜">
+            <img src="../img/sim/wujing.png" alt="物镜">
+        </button>
+
+        <!-- 状态面板 -->
+        <div id="statusPanel">
+            <div>波长: <span id="lamDisplay">589.3</span> nm</div>
+            <div>亮度: <span id="brightnessDisplay">40</span>%</div>
+        </div>
+    </div>
+
+    <script src="../js/sim/state.js"></script>
+    <script>
+        // 配置
+        const CANVAS_SIZE = 600;
+        const EYEPIECE_IMAGES = ['mj1.png', 'mj2.png', 'mj3.png'];
+        const BRIGHTNESS_LEVELS = [0.4, 0.7, 1.0];
+
+        // DOM 元素
+        const ringsCanvas = document.getElementById('ringsCanvas');
+        const filterLayer = document.getElementById('filterLayer');
+        const coverImg = document.getElementById('coverImg');
+        const eyepieceBtn = document.getElementById('eyepieceBtn');
+        const objectiveBtn = document.getElementById('objectiveBtn');
+        const lamDisplay = document.getElementById('lamDisplay');
+        const brightnessDisplay = document.getElementById('brightnessDisplay');
+
+        // Canvas 上下文
+        const ctx = ringsCanvas.getContext('2d');
+
+        // 当前状态
+        let eyepieceIndex = 0;
+        let brightnessLevel = 0;
+        let isRendering = false;
+
+        // 钠光颜色映射
+        function sodiumColormap(intensity) {
+            // 暗纹 (147, 96, 29) -> 明纹 (212, 155, 55)
+            const dark = { r: 147, g: 96, b: 29 };
+            const bright = { r: 212, g: 155, b: 55 };
+            return {
+                r: Math.round(dark.r + (bright.r - dark.r) * intensity),
+                g: Math.round(dark.g + (bright.g - dark.g) * intensity),
+                b: Math.round(dark.b + (bright.b - dark.b) * intensity)
+            };
+        }
+
+        // 清空画布
+        function clearCanvas() {
+            ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+        }
+
+        // 计算牛顿环
+        function renderNewtonRings() {
+            if (isRendering) return;
+            isRendering = true;
+
+            try {
+                // 检查显示条件
+                if (!simState.canShowRings()) {
+                    clearCanvas();
+                    isRendering = false;
+                    return;
+                }
+
+                const state = simState.getState();
+                const lam = state.lam;
+                const R = state.R;
+                const offset = state.offset || 0;
+
+                // 计算范围
+                const levels = 50;
+                const ym = Math.sqrt(levels * lam * R);
+
+                // 创建亮度数据
+                const imageData = ctx.createImageData(CANVAS_SIZE, CANVAS_SIZE);
+                const data = imageData.data;
+
+                // 遍历每个像素
+                for (let py = 0; py < CANVAS_SIZE; py++) {
+                    for (let px = 0; px < CANVAS_SIZE; px++) {
+                        // 像素坐标转物理坐标
+                        const X = ((px / CANVAS_SIZE) * 2 - 1) * ym;
+                        const Y = ((py / CANVAS_SIZE) * 2 - 1) * ym;
+
+                        // 计算径向距离（应用偏移）
+                        const r = Math.sqrt((X + offset) ** 2 + Y ** 2);
+
+                        // 计算光强: I = cos²(π(r²/R + λ/2)/λ)
+                        const phase = Math.PI * (r * r / R + lam / 2) / lam;
+                        const intensity = Math.cos(phase) ** 2;
+
+                        // 转换为亮度 [0, 255]
+                        const B = (intensity / 4) * 255;
+
+                        // 应用颜色映射
+                        const color = sodiumColormap(B / 255);
+
+                        const idx = (py * CANVAS_SIZE + px) * 4;
+                        data[idx] = color.r;
+                        data[idx + 1] = color.g;
+                        data[idx + 2] = color.b;
+                        data[idx + 3] = 255;
+                    }
+                }
+
+                ctx.putImageData(imageData, 0, 0);
+
+                // 更新亮度滤镜
+                updateBrightnessFilter();
+
+            } catch (error) {
+                console.error('渲染错误:', error);
+                clearCanvas();
+            } finally {
+                isRendering = false;
+            }
+        }
+
+        // 更新亮度滤镜
+        function updateBrightnessFilter() {
+            const brightness = BRIGHTNESS_LEVELS[brightnessLevel];
+            const opacity = (1 - brightness);
+
+            if (opacity > 0) {
+                filterLayer.style.backgroundColor = `rgba(0, 0, 0, ${opacity})`;
+            } else {
+                filterLayer.style.backgroundColor = 'transparent';
+            }
+
+            brightnessDisplay.textContent = Math.round(brightness * 100);
+        }
+
+        // 打开或聚焦已有窗口
+        async function createOrFocusWindow(windowLabel, url, title, width, height) {
+            const absoluteUrl = url.startsWith('/') ? url : '/pages/' + url;
+
+            if (window.__TAURI__) {
+                try {
+                    const webviewWindowModule = window.__TAURI__.webviewWindow ?? window.__TAURI__['window'] ?? null;
+                    const WebviewWindow = webviewWindowModule?.WebviewWindow;
+                    if (!WebviewWindow) return;
+
+                    const existingWin = await WebviewWindow.getByLabel(windowLabel);
+                    if (existingWin) {
+                        await existingWin.unminimize();
+                        await existingWin.setFocus();
+                        return;
+                    }
+                    new WebviewWindow(windowLabel, {
+                        url: absoluteUrl, title, width, height, center: true, resizable: true,
+                    });
+                } catch (e) { console.error('窗口操作异常:', e); }
+            } else {
+                window.open(absoluteUrl, windowLabel, `width=${width},height=${height}`);
+            }
+        }
+
+        // 打开刻度读数与数据记录窗口
+        function openScaleAndDataWindows() {
+            createOrFocusWindow('scaleDataWindow', 'scale-data-window.html', '刻度读数与数据记录', 1200, 800);
+        }
+
+        // 切换目镜图片
+        function toggleEyepiece() {
+            const newtonPlaced = simState.getStateValue('newtonPlaced');
+
+            eyepieceIndex = (eyepieceIndex + 1) % 3;
+            coverImg.src = `../img/sim/${EYEPIECE_IMAGES[eyepieceIndex]}`;
+            simState.setState('eyepieceIndex', eyepieceIndex);
+
+            // 任务3：目镜调到清晰状态（第3张图片 mj3）
+            if (eyepieceIndex === 2 && newtonPlaced) {
+                simState.updateTaskState(3, true);
+            } else {
+                simState.updateTaskState(3, false);
+                simState.updateTaskState(4, false);
+            }
+
+            // 物镜调焦已完成时，点击目镜按钮打开标尺和数据窗口
+            if (simState.getStateValue('taskStates')[4] === 1) {
+                openScaleAndDataWindows();
+            }
+
+            console.log('目镜图片:', eyepieceIndex + 1);
+        }
+
+        // 切换物镜亮度
+        function cycleBrightness() {
+            // 只有任务4完成后才能调节物镜
+            const state = simState.getState();
+            if (state.taskStates[3] === 0) return;
+
+            brightnessLevel = (brightnessLevel + 1) % 3;
+            simState.setState('brightnessLevel', brightnessLevel);
+            updateBrightnessFilter();
+
+            // 任务4：亮度调到100%
+            if (brightnessLevel === 2) {
+                simState.updateTaskState(4, true);
+            } else {
+                simState.updateTaskState(4, false);
+            }
+
+            console.log('亮度级别:', BRIGHTNESS_LEVELS[brightnessLevel] * 100 + '%');
+        }
+
+        // 初始化
+        function init() {
+            // 恢复状态
+            const state = simState.getState();
+            eyepieceIndex = state.eyepieceIndex || 0;
+            brightnessLevel = state.brightnessLevel || 0;
+
+            // 更新显示
+            coverImg.src = `../img/sim/${EYEPIECE_IMAGES[eyepieceIndex]}`;
+            lamDisplay.textContent = (state.lam * 1e9).toFixed(0);
+            updateBrightnessFilter();
+
+            // 初始渲染
+            renderNewtonRings();
+
+            // 监听状态变化
+            simState.onStateChange((newState) => {
+                // 重新渲染牛顿环
+                renderNewtonRings();
+
+                // 同步目镜和亮度状态
+                if (newState.eyepieceIndex !== undefined) {
+                    eyepieceIndex = newState.eyepieceIndex;
+                    coverImg.src = `../img/sim/${EYEPIECE_IMAGES[eyepieceIndex]}`;
+                }
+                if (newState.brightnessLevel !== undefined) {
+                    brightnessLevel = newState.brightnessLevel;
+                    updateBrightnessFilter();
+                }
+            });
+        }
+
+        // 事件绑定
+        eyepieceBtn.addEventListener('click', toggleEyepiece);
+        objectiveBtn.addEventListener('click', cycleBrightness);
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

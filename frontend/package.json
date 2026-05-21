@@ -1,0 +1,29 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n backend,frontend -c blue,green \"python ../server.py\" \"vite\"",
+    "dev:frontend": "vite",
+    "dev:backend": "python ../server.py",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.10.1",
+    "katex": "^0.16.45",
+    "pdfjs-dist": "^5.6.205",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.32",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.4",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "concurrently": "^9.2.1",
+    "daisyui": "^5.5.19",
+    "tailwindcss": "^4.2.4",
+    "vite": "^8.0.10"
+  }
+}

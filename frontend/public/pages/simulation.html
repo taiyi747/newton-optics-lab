@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>牛顿环仿真实验</title>
+<style>
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        /* 彻底干掉 body 的任何滚动和默认排版 */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            overflow: hidden;
+            background-color: #000;
+            width: 100vw;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* 采用绝对定位缩放法，完全规避 Flexbox 的缩放偏移 Bug */
+        .main-container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            /* 严格锁死 1920x1080 基准尺寸 */
+            width: 1920px;
+            height: 1080px;
+            /* 强制从左上角原点开始缩放 */
+            transform-origin: left top; 
+        }
+
+        #instrument-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* 透明按钮通用样式 */
+        .transparent-btn {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+            background: transparent;
+            border: none;
+            /* 取消下面的注释可以显示红色半透明框，方便你微调位置！ */
+            /*
+            opacity: 0.3 !important;
+            background: rgba(255, 0, 0, 0.3) !important;
+            border: 2px solid red !important;
+            */
+        }
+        .transparent-btn:hover {
+            opacity: 0.2;
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        #dyBtn {
+            left: 1380px; 
+            top: 595px;
+            width: 430px; 
+            height: 340px; 
+        }
+
+        #mjBtn {
+            left: -175px;
+            top: -120px;
+            width: 131px;
+            height: 151px;
+        }
+        #fsjBtn {
+            left: -50px;
+            top: 380px;
+            width: 61px;
+            height: 91px;
+        }
+        #ndhBtn {
+            left: 44px;
+            top: 705px;
+            width: 151px;
+            height: 71px;
+        }
+        #ndhRemoveBtn {
+            left: -320px;
+            top: 450px;
+            width: 151px;
+            height: 71px;
+        }
+
+        #taskFrame {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            width: 280px;
+            background-color: rgba(128, 128, 128, 0.7);
+            border-radius: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            padding: 15px;
+            z-index: 3;
+            backdrop-filter: blur(5px);
+        }
+        #taskTitle {
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 10px;
+            background: transparent;
+        }
+        .task-item {
+            margin: 5px 0;
+            padding: 5px 10px;
+            border-radius: 5px;
+            background-color: white;
+            color: #333;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        .task-item.completed {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+            border: 1px solid #45a049;
+        }
+
+        .tooltip { position: relative; }
+        .tooltip::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: black;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .tooltip:hover::after { opacity: 1; }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <img id="instrument-bg" src="../img/sim/F-C.webp" alt="仪器">
+
+        <button id="dyBtn" class="transparent-btn tooltip" data-tooltip="电源"></button>
+        <button id="mjBtn" class="transparent-btn tooltip" data-tooltip="目镜"></button>
+        <button id="fsjBtn" class="transparent-btn tooltip" data-tooltip="反射镜"></button>
+        <button id="ndhBtn" class="transparent-btn tooltip" data-tooltip="放置牛顿环"></button>
+        <button id="ndhRemoveBtn" class="transparent-btn tooltip" data-tooltip="取下牛顿环"></button>
+
+        <div id="taskFrame">
+            <div id="taskTitle">实验操作步骤</div>
+            <div id="task0" class="task-item">1. 打开钠光灯电源</div>
+            <div id="task1" class="task-item">2. 调整反射镜至45°</div>
+            <div id="task2" class="task-item">3. 放置牛顿环</div>
+            <div id="task3" class="task-item">4. 目镜调焦</div>
+            <div id="task4" class="task-item">5. 物镜调焦</div>
+            <div id="task5" class="task-item">6. 记录实验数据</div>
+        </div>
+    </div>
+
+    <script src="../js/sim/state.js"></script>
+<script>
+    async function createOrFocusWindow(windowLabel, url, title, width, height) {
+        console.log('触发窗口:', windowLabel);
+
+        // 生产环境必须用绝对路径，开发环境相对路径也兼容
+        const absoluteUrl = url.startsWith('/') ? url : '/pages/' + url;
+
+        if (window.__TAURI__) {
+            try {
+                // 兼容 Tauri v2 不同构建下的 API 挂载位置
+                const webviewWindowModule =
+                    window.__TAURI__.webviewWindow ??
+                    window.__TAURI__['window'] ??
+                    null;
+
+                const WebviewWindow = webviewWindowModule?.WebviewWindow;
+
+                if (!WebviewWindow) {
+                    console.error('WebviewWindow API 未找到，__TAURI__ 结构:', Object.keys(window.__TAURI__));
+                    return null;
+                }
+
+                // getByLabel 在 v2 中是同步的，加 await 也安全
+                const existingWin = await WebviewWindow.getByLabel(windowLabel);
+
+                if (existingWin) {
+                    console.log('窗口已存在，置顶聚焦:', windowLabel);
+                    await existingWin.unminimize();
+                    await existingWin.setFocus();
+                    return existingWin;
+                }
+
+                console.log('创建新窗口:', windowLabel, '路径:', absoluteUrl);
+                const webview = new WebviewWindow(windowLabel, {
+                    url: absoluteUrl,
+                    title: title,
+                    width: width,
+                    height: height,
+                    center: true,
+                    resizable: true,
+                });
+
+                webview.once('tauri://created', () => {
+                    console.log('窗口创建成功:', windowLabel);
+                });
+                webview.once('tauri://error', (e) => {
+                    console.error('创建窗口失败:', windowLabel, e);
+                });
+
+                return webview;
+            } catch (error) {
+                console.error('窗口操作异常:', error);
+                return null;
+            }
+        }
+
+        // 浏览器回退
+        return window.open(absoluteUrl, windowLabel, `width=${width},height=${height}`);
+    }
+
+    // === 缩放算法 ===
+    function resizeContainer() {
+        const container = document.querySelector('.main-container');
+        const scaleX = window.innerWidth / 1920;
+        const scaleY = window.innerHeight / 1080;
+        const scale = Math.min(scaleX, scaleY);
+        const offsetX = (window.innerWidth - 1920 * scale) / 2;
+        const offsetY = (window.innerHeight - 1080 * scale) / 2;
+        container.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+    }
+
+    window.addEventListener('resize', resizeContainer);
+
+    function init() {
+        simState.resetState();
+        prevTask4State = 0;
+        updateUI();
+        simState.onStateChange(() => { updateUI(); });
+    }
+
+    // 记录上一次 task4 状态，只在 0→1 转变时自动打开窗口
+    let prevTask4State = 0;
+
+    function updateUI() {
+        const state = simState.getState();
+        document.getElementById('instrument-bg').src = `../img/sim/${simState.getInstrumentImage()}`;
+        for (let i = 0; i < 6; i++) {
+            const taskEl = document.getElementById(`task${i}`);
+            if (state.taskStates[i] === 1) {
+                taskEl.classList.add('completed');
+            } else {
+                taskEl.classList.remove('completed');
+            }
+        }
+        // 只在 task4 从未完成变为完成时自动打开窗口
+        if (state.taskStates[4] === 1 && prevTask4State === 0) {
+            openScaleAndDataWindows();
+        }
+        prevTask4State = state.taskStates[4];
+    }
+
+    function openPowerWindow() {
+        createOrFocusWindow('powerWindow', 'power.html', '钠光灯电源', 800, 450);
+    }
+    function openReflectorWindow() {
+        createOrFocusWindow('reflectorWindow', 'reflector.html', '反射镜调节', 1422, 800);
+    }
+    function openLensWindow() {
+        createOrFocusWindow('scaleDataWindow', 'scale-data-window.html', '刻度读数与数据记录', 1200, 800);
+    }
+    function openScaleAndDataWindows() {
+        createOrFocusWindow('scaleDataWindow', 'scale-data-window.html', '刻度读数与数据记录', 1200, 800);
+    }
+
+    function placeNewton() {
+        if (simState.getStateValue('newtonPlaced')) return;
+        simState.setState('newtonPlaced', true);
+        simState.updateTaskState(2, true);
+        updateUI();
+    }
+
+    function removeNewton() {
+        if (!simState.getStateValue('newtonPlaced')) return;
+        simState.setState('newtonPlaced', false);
+        simState.updateTaskState(2, false);
+        simState.updateTaskState(3, false);
+        simState.updateTaskState(4, false);
+        updateUI();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        resizeContainer();
+        init();
+
+        // 绑定按钮事件
+        document.getElementById('dyBtn').addEventListener('click', openPowerWindow);
+        document.getElementById('mjBtn').addEventListener('click', openLensWindow);
+        document.getElementById('fsjBtn').addEventListener('click', openReflectorWindow);
+        document.getElementById('ndhBtn').addEventListener('click', placeNewton);
+        document.getElementById('ndhRemoveBtn').addEventListener('click', removeNewton);
+    });
+</script>
+</body>
+</html>

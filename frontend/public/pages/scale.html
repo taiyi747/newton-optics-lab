@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>刻度窗口</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: #e0e0e0;
+            overflow: hidden; /* 防止出现外部滚动条 */
+        }
+        .scale-container {
+            /* 完全贴合浏览器窗口 */
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+        }
+        /* 横向标尺包裹层：固定高度 */
+        .h-scale-wrapper {
+            height: 80px; 
+            background: white;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            padding: 5px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        }
+        /* 纵向鼓轮包裹层：自动填满剩余空间 */
+        .v-drum-wrapper {
+            flex: 1; /* 关键：自动伸展填充垂直空间 */
+            min-height: 150px;
+            background: white;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            padding: 5px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        /* 按钮行 */
+        .button-row {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 4px;
+            background: #3b82f6;
+            color: white;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background: #2563eb;
+        }
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 13px;
+            color: #444;
+            cursor: pointer;
+            margin-left: 5px;
+        }
+        /* 信息面板 */
+        .info-panel {
+            display: flex;
+            justify-content: space-around;
+            padding: 15px 10px;
+            background: #222; /* 深色仪器感面板 */
+            color: white;
+            border-radius: 5px;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
+        }
+        .info-item {
+            text-align: center;
+        }
+        .info-label {
+            color: #aaa;
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+        .info-value {
+            font-family: 'Courier New', Courier, monospace;
+            /* 关键修改：放大数字，增强科技感 */
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ff00;
+            text-shadow: 0 0 5px rgba(0, 255, 0, 0.4);
+        }
+        /* 鼓轮区域左侧的 k 值显示 */
+        .drum-level-display {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 10;
+            text-align: center;
+            background: rgba(34, 34, 34, 0.85);
+            border-radius: 6px;
+            padding: 8px 14px;
+        }
+        .drum-level-label {
+            color: #aaa;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .drum-level-value {
+            font-family: 'Courier New', monospace;
+            font-size: 28px;
+            font-weight: bold;
+            color: #00ff00;
+            text-shadow: 0 0 5px rgba(0,255,0,0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="scale-container">
+        <div class="h-scale-wrapper" id="hWrapper">
+            <canvas id="hScaleCanvas"></canvas>
+        </div>
+
+        <div class="v-drum-wrapper" id="vWrapper">
+            <div class="drum-level-display">
+                <div class="drum-level-label">k</div>
+                <div class="drum-level-value" id="levelDisplay">0</div>
+            </div>
+            <canvas id="vDrumCanvas"></canvas>
+        </div>
+
+        <div class="button-row">
+            <button class="btn" id="btnLeft40">左40级</button>
+            <button class="btn" id="btnLeft5">←5级</button>
+            <button class="btn" id="btnCenter">复位居中</button>
+            <button class="btn" id="btnRight5">5级→</button>
+            <label class="checkbox-row">
+                <input type="checkbox" id="showDataCheckbox" >
+                <span>显示参考读数</span>
+            </label>
+        </div>
+
+        <div class="info-panel" id="infoPanel" style="display: none;">
+            <div class="info-item">
+                <div class="info-label">主尺位置 (D)</div>
+                <div class="info-value" id="pointerDisplay">25.000 mm</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/sim/state.js"></script>
+    <script>
+        const hScaleCanvas = document.getElementById('hScaleCanvas');
+        const vDrumCanvas = document.getElementById('vDrumCanvas');
+        const hCtx = hScaleCanvas.getContext('2d');
+        const vCtx = vDrumCanvas.getContext('2d');
+        
+        const hWrapper = document.getElementById('hWrapper');
+        const vWrapper = document.getElementById('vWrapper');
+
+        let showData = false;
+        let pointerPosition = 25; 
+        const centerPosition = 25; 
+
+        const levelDisplay = document.getElementById('levelDisplay');
+        const pointerDisplay = document.getElementById('pointerDisplay');
+        const showDataCheckbox = document.getElementById('showDataCheckbox');
+
+        // 动态调整画布内部真实分辨率，防止拉伸模糊
+        function resizeCanvases() {
+            hScaleCanvas.width = hWrapper.clientWidth - 10;
+            hScaleCanvas.height = hWrapper.clientHeight - 10;
+            vDrumCanvas.width = vWrapper.clientWidth - 10;
+            vDrumCanvas.height = vWrapper.clientHeight - 10;
+            updateDisplay();
+        }
+
+        function calculateRingRadius(k, lam, R) {
+            if (k < 0) return 0;
+            return Math.sqrt(k * lam * R) * 1000;
+        }
+
+        function drawHorizontalScale() {
+            const width = hScaleCanvas.width;
+            const height = hScaleCanvas.height;
+            hCtx.clearRect(0, 0, width, height);
+            
+            const scaleLength = 50; 
+            const padding = 25;
+            const scaleWidth = width - (padding * 2);
+
+            for (let pos = 0; pos <= scaleLength; pos++) {
+                const x = padding + (pos / scaleLength) * scaleWidth;
+                if (pos % 5 === 0) {
+                    hCtx.beginPath();
+                    hCtx.moveTo(x, height * 0.3);
+                    hCtx.lineTo(x, height * 0.65);
+                    hCtx.strokeStyle = '#333';
+                    hCtx.lineWidth = (pos % 10 === 0) ? 2 : 1;
+                    hCtx.stroke();
+                    if (pos % 10 === 0) {
+                        hCtx.fillStyle = '#333';
+                        hCtx.font = 'bold 11px sans-serif';
+                        hCtx.fillText(pos.toString(), x - 6, height * 0.9);
+                    }
+                } else {
+                    hCtx.beginPath();
+                    hCtx.moveTo(x, height * 0.4);
+                    hCtx.lineTo(x, height * 0.6);
+                    hCtx.strokeStyle = '#999';
+                    hCtx.lineWidth = 0.5;
+                    hCtx.stroke();
+                }
+            }
+            drawPointer(padding, scaleWidth, scaleLength, height);
+        }
+
+        function drawPointer(padding, scaleWidth, scaleLength, height) {
+            const state = simState.getState();
+            const currentLevel = state.currentLevel;
+            const radius = calculateRingRadius(Math.abs(currentLevel), state.lam, state.R);
+            pointerPosition = centerPosition + (currentLevel < 0 ? -1 : 1) * radius;
+            
+            const pointerX = padding + (pointerPosition / scaleLength) * scaleWidth;
+
+            hCtx.beginPath();
+            hCtx.moveTo(pointerX, height * 0.1);
+            hCtx.lineTo(pointerX, height * 0.5);
+            hCtx.strokeStyle = '#ef4444';
+            hCtx.lineWidth = 2;
+            hCtx.stroke();
+
+            if (showData) {
+                hCtx.fillStyle = '#ef4444';
+                hCtx.font = '11px monospace';
+                hCtx.fillText(pointerPosition.toFixed(3), pointerX + 4, height * 0.25);
+            }
+            pointerDisplay.textContent = `${pointerPosition.toFixed(3)} mm`;
+        }
+
+        function drawVerticalDrum() {
+            const width = vDrumCanvas.width;
+            const height = vDrumCanvas.height;
+            vCtx.clearRect(0, 0, width, height);
+            vCtx.fillStyle = '#f8f8f8';
+            vCtx.fillRect(0, 0, width, height);
+
+            const drumLeftMargin = 80; // 为左侧 k 值显示留出空间
+            const centerX = drumLeftMargin + (width - drumLeftMargin) / 2;
+            const drumReading = (pointerPosition % 1) * 100;
+            const baseScale = Math.floor(drumReading);
+            const fractional = drumReading - baseScale;
+
+            // 扩展循环范围以适应高窗口
+            for (let i = -15; i <= 15; i++) {
+                const reading = (baseScale - i + 100) % 100;
+                const y_pos = height / 2 + (i + fractional) * 25;
+
+                // 超出视口的线条不绘制
+                if(y_pos < -10 || y_pos > height + 10) continue;
+
+                vCtx.beginPath();
+                vCtx.moveTo(centerX - 60, y_pos);
+                vCtx.lineTo(centerX - 20, y_pos);
+                vCtx.strokeStyle = (reading % 5 === 0) ? '#333' : '#aaa';
+                vCtx.stroke();
+
+                if (reading % 5 === 0) {
+                    vCtx.fillStyle = '#333';
+                    vCtx.font = 'bold 12px monospace';
+                    vCtx.fillText(reading.toString().padStart(2, '0'), centerX - 10, y_pos + 4);
+                }
+            }
+
+            // 指示红线 (中心)
+            vCtx.beginPath();
+            vCtx.moveTo(centerX - 80, height / 2);
+            vCtx.lineTo(centerX + 20, height / 2);
+            vCtx.strokeStyle = 'rgba(239, 68, 68, 0.8)';
+            vCtx.lineWidth = 2.5;
+            vCtx.stroke();
+        }
+
+        function moveLevel(delta) {
+            const state = simState.getState();
+            let newLevel = Math.max(-50, Math.min(50, state.currentLevel + delta));
+            simState.setState('currentLevel', newLevel);
+            const offset = (newLevel < 0 ? -1 : 1) * Math.sqrt(Math.abs(newLevel) * state.lam * state.R);
+            simState.setState('offset', offset);
+            updateDisplay();
+        }
+
+        function setLevel(targetLevel) {
+            const state = simState.getState();
+            let newLevel = Math.max(-50, Math.min(50, targetLevel));
+            simState.setState('currentLevel', newLevel);
+            const offset = (newLevel < 0 ? -1 : 1) * Math.sqrt(Math.abs(newLevel) * state.lam * state.R);
+            simState.setState('offset', offset);
+            updateDisplay();
+        }
+
+        function centerRings() {
+            simState.setState('currentLevel', 0);
+            simState.setState('offset', 0);
+            updateDisplay();
+        }
+
+        function toggleShowData() {
+            showData = showDataCheckbox.checked;
+            document.getElementById('infoPanel').style.display = showData ? 'flex' : 'none';
+            updateDisplay();
+        }
+
+        function updateDisplay() {
+            const state = simState.getState();
+            levelDisplay.textContent = state.currentLevel;
+            drawHorizontalScale();
+            drawVerticalDrum();
+        }
+
+        function init() {
+            // 监听窗口大小变化
+            window.addEventListener('resize', resizeCanvases);
+
+            simState.onStateChange(() => updateDisplay());
+
+            // 初始化画布尺寸和绘制
+            resizeCanvases();
+
+            // 绑定按钮事件
+            document.getElementById('btnLeft40').addEventListener('click', () => setLevel(-40));
+            document.getElementById('btnLeft5').addEventListener('click', () => moveLevel(-5));
+            document.getElementById('btnCenter').addEventListener('click', centerRings);
+            document.getElementById('btnRight5').addEventListener('click', () => moveLevel(5));
+            document.getElementById('showDataCheckbox').addEventListener('change', toggleShowData);
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
