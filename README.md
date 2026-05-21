@@ -132,18 +132,18 @@ python pack.py
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `NEWTON_AI_API_KEY` | AI 服务 API 密钥 | - |
-| `NEWTON_AI_BASE_URL` | AI 服务 Base URL | `https://api.siliconflow.cn` |
-| `NEWTON_AI_MODEL` | AI 模型名称 | `deepseek-ai/DeepSeek-V4-Flash` |
-| `NEWTON_CORS_ORIGINS` | 允许的 CORS 源（逗号分隔） | `*` |
+| `AI_API_KEY` | AI 服务 API 密钥 | - |
+| `AI_API_BASE_URL` | AI 服务 Base URL | `https://api.siliconflow.cn` |
+| `AI_MODEL` | AI 模型名称 | `deepseek-ai/DeepSeek-V4-Flash` |
+| `AI_REASONING_EFFORT` | 推理强度 (low/medium/high) | `high` |
 
 示例 `.env`：
 
 ```env
-NEWTON_AI_API_KEY=your-key
-NEWTON_AI_BASE_URL=https://api.siliconflow.cn
-NEWTON_AI_MODEL=deepseek-ai/DeepSeek-V4-Flash
-NEWTON_CORS_ORIGINS=http://localhost:5173,http://localhost:8000
+AI_API_KEY=your-key
+AI_API_BASE_URL=https://api.siliconflow.cn
+AI_MODEL=deepseek-ai/DeepSeek-V4-Flash
+AI_REASONING_EFFORT=high
 ```
 
 ## 运行模式说明
